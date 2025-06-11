@@ -1,5 +1,5 @@
 name: Solicitud de funcionalidad
-description: Solicita una nueva funcionalidad o mejora para la aplicación
+description: Tienes una idea que te gustaria ver implementada en la aplicación? ¡Ayúdanos a mejorar! 🚀
 title: '[Feature] '
 labels: [feature]
 assignees: []
@@ -7,13 +7,6 @@ assignees: []
 type: 'Feature'
 
 body:
-  - type: markdown
-    attributes:
-      value: '## ¡Bienvenido! 👋'
-  - type: markdown
-    attributes:
-      value: |
-        Tienes una idea que te gustaria ver implementada en la aplicación? ¡Ayúdanos a mejorar! 🚀
   - type: textarea
     id: description
     attributes:

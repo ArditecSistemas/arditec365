@@ -1,5 +1,5 @@
 name: Reporte de error
-description: ¿Algo que no está funcionando correctamente? ¡Ayúdanos a solucionarlo!
+description: 🙇 ¿Algo que no está funcionando correctamente? ¡Ayúdanos a solucionarlo!
 title: '[Bug] '
 labels: [bug]
 assignees: []
@@ -7,13 +7,6 @@ assignees: []
 type: 'Bug'
 
 body:
-  - type: markdown
-    attributes:
-      value: '## ¡Bienvenido! 👋'
-  - type: markdown
-    attributes:
-      value: |
-        Gracias por ofercernos tu tiempo para reportar este error. 🙇
   - type: textarea
     id: description
     attributes:
