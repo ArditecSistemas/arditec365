@@ -1,0 +1,63 @@
+name: Reporte de error
+description: ¿Algo que no está funcionando correctamente? ¡Ayúdanos a solucionarlo!
+title: '[Bug] '
+labels: [bug]
+assignees: []
+# projects: [ArditecSistemas/4]
+type: 'Bug'
+
+body:
+  - type: markdown
+    attributes:
+      value: '## ¡Bienvenido! 👋'
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por ofercernos tu tiempo para reportar este error. 🙇
+  - type: textarea
+    id: description
+    attributes:
+      label: Descripción
+      description: ¿Con qué error te has encontrado? Describe el problema brevemente.
+      placeholder: 'El botón de login bloquea la aplicación.'
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos de reproducción
+      description: Lista paso a paso para reproducir el error.
+      placeholder: |
+        1. Ir a la página de inicio de sesión
+        2. Click en 'Login'
+        3. Se muestra el error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamiento esperado
+      description: ¿Qué esperarías que hubiese ocurrido?
+      placeholder: 'Al hacer click en Login con las credenciales correctas, espero acceder a la página principal de la aplicación.'
+    validations:
+      required: false
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Comportamiento actual
+      description: What actually happened?
+      placeholder: 'La aplicación se bloquea al hacer click en Login. Intentar con otras credenciales no resuelve el problema. La única solución ha sido recargar la página.'
+    validations:
+      required: false
+
+  - type: input
+    id: environment
+    attributes:
+      label: Entorno
+      description: Sistema operativo, navegador, dispositivo dónde se ha producido el error.
+      placeholder: 'iOS 17.2 usando Safari'
+    validations:
+      required: false

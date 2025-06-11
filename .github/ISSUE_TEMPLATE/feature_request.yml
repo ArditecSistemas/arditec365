@@ -1,0 +1,24 @@
+name: Solicitud de funcionalidad
+description: Solicita una nueva funcionalidad o mejora para la aplicación
+title: '[Feature] '
+labels: [feature]
+assignees: []
+# projects: [ArditecSistemas/4]
+type: 'Feature'
+
+body:
+  - type: markdown
+    attributes:
+      value: '## ¡Bienvenido! 👋'
+  - type: markdown
+    attributes:
+      value: |
+        Tienes una idea que te gustaria ver implementada en la aplicación? ¡Ayúdanos a mejorar! 🚀
+  - type: textarea
+    id: description
+    attributes:
+      label: Descripción
+      description: ¿Qué funcionalidad o mejora te gustaria implementar? Incluye todo el contexto e información que puedas proporcionar.
+      placeholder: 'Me gustaría que ...'
+    validations:
+      required: true
