@@ -26,19 +26,20 @@
         - [Gastos](/docs/modules/partes/partes?id=tab-gastos)
         - [Media](/docs/modules/partes/partes?id=tab-media)
         - [Comunicaciones](/docs/modules/partes/partes?id=tab-comunicaciones)
-      - [Acciones](/docs/modules/partes/partes?id=acciones)
 
-          <!-- - [Ciclo de vida de un parte de trabajo]() -->
-          <!-- - [Crear un parte]() -->
-          <!-- - [...]() -->
+    - [Mantenimientos](/docs/modules/partes/setup?id=partes-setup)
 
-        <!-- - [Mantenimientos](/docs/modules/partes/setup)-->
+      - [Clientes](/docs/modules/partes/setup?id=tab-clientes)
+      - [Tags](/docs/modules/partes/setup?id=tab-tags)
+      - [Productos](/docs/modules/partes/setup?id=tab-productos)
+      - [Ámbitos](/docs/modules/partes/setup?id=tab-ambitos)
+      - [Almacenes](/docs/modules/partes/setup?id=tab-almacenes)
 
-        <!-- - [Clientes]()
-        - [Tags]()
-        - [Productos]()
-        - [Ambitos]()
-        - [Almacenes]() -->
+          <!-- - [Clientes]()
+          - [Tags]()
+          - [Productos]()
+          - [Ambitos]()
+          - [Almacenes]() -->
 
 * [Preguntas frecuentes (FAQ)](/docs/faqs)
 * [Reportar errores o pedir soporte](/docs/bug-report-or-help)
