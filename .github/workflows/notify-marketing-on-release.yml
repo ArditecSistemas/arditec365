@@ -1,0 +1,37 @@
+name: Notify Marketing on Release (Email)
+
+on:
+  workflow_dispatch:   # manual trigger from GitHub UI
+  release:
+    types: [published]
+
+jobs:
+  send-email:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send email via SMTP
+        uses: dawidd6/action-send-mail@v3
+        with:
+          secure: false
+          ignore_cert: true
+          server_address: ${{ secrets.SMTP_HOST }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "🚀 Nueva Release Publicada"
+          to: ${{ secrets.MARKETING_EMAIL }}
+          cc: ${{ secrets.CC_EMAIL }}
+          from: ${{ secrets.FROM_EMAIL }}
+          content_type: text/html
+          convert_markdown: true
+          html_body: |
+            Hola equipo!
+
+            ¡Se acaba de publicar una nueva release de arditec365! 🎉
+
+            - **Release:** ${{ github.event.release.name }}
+            - **Tag:** ${{ github.event.release.tag_name }}
+
+            👉 [Ver las notas de versión completas en GitHub](${{ github.event.release.html_url }})
+
+            — Your friendly automation 🤖
