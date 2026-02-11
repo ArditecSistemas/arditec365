@@ -1,0 +1,166 @@
+name: Prepare draft Release
+
+on:
+  workflow_dispatch:
+  #schedule:
+  #  - cron: '0 9 * * 1' # optional: every Monday at 9:00 UTC
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout public repo
+        uses: actions/checkout@v3
+
+      - name: Set up Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Install dependencies
+        run: sudo apt-get install -y jq
+      
+      - name: Checkout release-state branch
+        run: |
+          git fetch origin release-state || true
+          git checkout release-state || git checkout --orphan release-state
+      
+      - name: Ensure last-release.json exists
+        run: |
+          if [ ! -f .last-release.json ]; then
+            echo "{}" > .last-release.json
+          fi
+          
+      - name: Clone private repos
+        run: |
+          REPOS=("api-admin-ardisaas" "api-ardisaas" "app-ardisaas")
+          #BRANCHES=("develop" "develop" "develop" "develop") # customize branches per repo
+
+          for i in "${!REPOS[@]}"; do
+            repo="${REPOS[$i]}"
+            #branch="${BRANCHES[$i]}"
+            #echo "Cloning $repo branch $branch..."
+            echo "Cloning $repo..."
+            #git clone --branch "$branch" https://x-access-token:${{ secrets.ARDITEC365_REPOS_SECRET }}@github.com/ArditecSistemas/$repo.git
+            git clone https://x-access-token:${{ secrets.ARDITEC365_REPOS_SECRET  }}@github.com/ArditecSistemas/$repo.git
+          done
+          
+      - name: Prepare accumulators and determine if wipe is needed
+        id: prepare_accumulators
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+      
+            const releases = await github.rest.repos.listReleases({ owner, repo });
+      
+            // Latest published release
+            const latestPublished = releases.data.find(r => !r.draft);
+            const latestTag = latestPublished?.tag_name || 'v0.0.0';
+            let [major, minor, patch] = latestTag.replace(/^v/, '').split('.').map(Number);
+      
+            // Candidate next tag
+            let candidateTag = `v${major}.${minor + 1}.${patch}`;
+      
+            // Check if a draft already exists
+            let draft = releases.data.find(r => r.draft && r.tag_name === candidateTag);
+            const nextTag = draft ? draft.tag_name : candidateTag;
+      
+            core.setOutput("next_tag", nextTag);
+            core.setOutput("createDraft", (!draft).toString());
+            core.setOutput("draftId", draft ? draft.id : null);
+      
+            // Accumulator files
+            const files = [".release-features.md", ".release-fixes.md", ".release-others.md"];
+            for (const file of files) {
+              if (!fs.existsSync(file)) fs.writeFileSync(file, "");
+            }
+      
+            // Wipe only if draft does NOT exist (new draft)
+            if (!draft) {
+              for (const file of files) fs.writeFileSync(file, "");
+            }
+
+
+
+      - name: Gather and categorize commits
+        run: |
+          set -e
+          REPOS=("api-admin-ardisaas" "api-ardisaas" "app-ardisaas")
+          LAST=$(cat .last-release.json)
+
+          FEATURES_ACC=".release-features.md"
+          FIXES_ACC=".release-fixes.md"
+          OTHERS_ACC=".release-others.md"
+
+          for repo in "${REPOS[@]}"; do
+            cd "$repo"
+            LAST_HASH=$(echo "$LAST" | jq -r --arg repo "$repo" '.[$repo]')
+            RANGE=""
+            if [ "$LAST_HASH" != "null" ] && [ -n "$LAST_HASH" ]; then
+              RANGE="$LAST_HASH..HEAD"
+            fi
+
+            COMMITS=$(git log $RANGE --pretty=format:"%s (%h, %an)")
+
+            while read -r MSG; do
+              [ -z "$MSG" ] && continue
+
+              if [[ "$MSG" =~ ^(\✨|sparkles:|feat|feature) ]]; then
+                echo "- $repo: $MSG" >> "../$FEATURES_ACC"
+              elif [[ "$MSG" =~ ^(🐛|🩹|🚑️|:bug:|ambulance:|:adhesive_bandage:|fix|hotfix) ]]; then
+                echo "- $repo: $MSG" >> "../$FIXES_ACC"
+              else
+                echo "- $repo: $MSG" >> "../$OTHERS_ACC"
+              fi
+            done <<< "$COMMITS"
+
+            LAST_HASH_CURRENT=$(git rev-parse HEAD)
+            LAST=$(echo "$LAST" | jq --arg repo "$repo" --arg hash "$LAST_HASH_CURRENT" '. + {($repo): $hash}')
+            cd ..
+          done
+
+          echo "$LAST" | jq '.' > .last-release.json
+
+      - name: Create or update draft release
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+
+            const features = fs.existsSync('.release-features.md') ? fs.readFileSync('.release-features.md', 'utf8') : '';
+            const fixes = fs.existsSync('.release-fixes.md') ? fs.readFileSync('.release-fixes.md', 'utf8') : '';
+            const others = fs.existsSync('.release-others.md') ? fs.readFileSync('.release-others.md', 'utf8') : '';
+
+            const body = `## New Features\n\n${features}\n## Fixes\n\n${fixes}\n## Others\n\n${others}`;
+
+            const nextTag = '${{ steps.prepare_accumulators.outputs.next_tag }}';
+            const createDraft = '${{ steps.prepare_accumulators.outputs.createDraft }}' === 'true';
+            const draftId = '${{ steps.prepare_accumulators.outputs.draftId }}';
+
+            if (!createDraft) {
+              await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: draftId,
+                body,
+                draft: true
+              });
+            } else {
+              await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: nextTag,
+                name: nextTag,
+                body,
+                draft: true
+              });
+            }
+
+      - name: Commit release state
+        run: |
+          git add .last-release.json .release-features.md .release-fixes.md .release-others.md
+          git commit -m "Update release aggregation state" || true
+          git push origin release-state
