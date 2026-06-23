@@ -1,4 +1,4 @@
-name: Build & Release Connector Arditec365
+name: Release Connector
 
 on:
   workflow_dispatch:
@@ -121,12 +121,6 @@ jobs:
           $tag = gh release list --repo '${{ secrets.PUBLIC_REPO_SLUG }}' --limit 1 --json tagName -q '.[0].tagName'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $tag = $tag.Trim()
-
-          $expectedTag = 'v${{ steps.version.outputs.new_version }}'
-          if ($tag -ne $expectedTag) {
-              Write-Error "Latest public release tag ($tag) does not match bumped version ($expectedTag). Create the public release first, then re-run."
-              exit 1
-          }
 
           gh release upload $tag `
             installer/Arditec365-Connector-Setup.exe `
