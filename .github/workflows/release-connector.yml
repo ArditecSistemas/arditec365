@@ -1,0 +1,137 @@
+name: Build & Release Connector Arditec365
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  release-connector:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout private connector repo
+        uses: actions/checkout@v4
+        with:
+          repository: ArditecSistemas/arditec365-conector
+          token: ${{ secrets.ARDITEC365_CONECTOR_PUBLISH_TOKEN }}
+          fetch-depth: 0
+
+      - name: Compute new version
+        id: version
+        shell: pwsh
+        run: |
+          # Read current version from conector.csproj
+          $content = Get-Content src/conector.csproj -Raw -Encoding UTF8
+          if ($content -match '<Version>([^<]+)</Version>') {
+            $currentVersion = $Matches[1]
+          } else {
+            Write-Error "Could not find <Version> in src/conector.csproj"
+            exit 1
+          }
+
+          Write-Host "Current version: $currentVersion"
+
+          $parts = $currentVersion.Split('.')
+          $major = [int]$parts[0]
+          $minor = [int]$parts[1]
+          $patch = [int]$parts[2]
+
+          switch ('${{ inputs.version_bump }}') {
+            'major' { $major++; $minor = 0; $patch = 0 }
+            'minor' { $minor++; $patch = 0 }
+            'patch' { $patch++ }
+            default { Write-Error "Unknown bump type: ${{ inputs.version_bump }}"; exit 1 }
+          }
+
+          $newVersion = "$major.$minor.$patch"
+          Write-Host "New version: $newVersion"
+
+          echo "new_version=$newVersion" >> $env:GITHUB_OUTPUT
+          echo "tag=v$newVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Patch conector.csproj
+        shell: pwsh
+        run: |
+          $newVersion = '${{ steps.version.outputs.new_version }}'
+          (Get-Content src/conector.csproj -Encoding UTF8) -replace '<Version>[^<]*</Version>', "<Version>$newVersion</Version>" |
+            Set-Content src/conector.csproj -Encoding UTF8
+
+      - name: Patch setup.iss
+        shell: pwsh
+        run: |
+          $newVersion = '${{ steps.version.outputs.new_version }}'
+          (Get-Content setup.iss -Encoding UTF8) -replace '(#define MyAppVersion\s+)"[^"]*"', ('$1"' + $newVersion + '"') |
+            Set-Content setup.iss -Encoding UTF8
+
+      - name: Commit version bump
+        shell: pwsh
+        run: |
+          $newVersion = '${{ steps.version.outputs.new_version }}'
+          $tag = '${{ steps.version.outputs.tag }}'
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add src/conector.csproj setup.iss
+          git commit -m "chore: bump version to $tag"
+          git push origin HEAD:main
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build self-contained executable
+        shell: pwsh
+        run: |
+          dotnet publish src/conector.csproj -c Release -r win-x64 --self-contained `
+            -p:PublishSingleFile=true `
+            -p:PublicBaseUrl=https://github.com/'${{ secrets.PUBLIC_REPO_SLUG }}'/releases/latest/download
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload assets to latest public release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.ARDITEC365_CONECTOR_PUBLISH_TOKEN }}
+        run: |
+          $tag = gh release list --repo '${{ secrets.PUBLIC_REPO_SLUG }}' --limit 1 --json tagName -q '.[0].tagName'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tag = $tag.Trim()
+
+          $expectedTag = 'v${{ steps.version.outputs.new_version }}'
+          if ($tag -ne $expectedTag) {
+              Write-Error "Latest public release tag ($tag) does not match bumped version ($expectedTag). Create the public release first, then re-run."
+              exit 1
+          }
+
+          gh release upload $tag `
+            installer/Arditec365-Connector-Setup.exe `
+            src/bin/Release/net8.0-windows/win-x64/publish/arditec365.exe `
+            src/bin/Release/net8.0-windows/win-x64/publish/migrations.zip `
+            src/bin/Release/net8.0-windows/win-x64/publish/version.txt `
+            --repo '${{ secrets.PUBLIC_REPO_SLUG }}' --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
