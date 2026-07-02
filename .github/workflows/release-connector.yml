@@ -96,7 +96,7 @@ jobs:
       - name: Build self-contained executable
         shell: pwsh
         run: |
-          dotnet publish src/conector.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:PublicBaseUrl=https://github.com/'${{ secrets.PUBLIC_REPO_SLUG }}'/releases/latest/download -p:SmtpHost=${{ secrets.SMTP_HOST }} -p:SmtpPort=${{ secrets.SMTP_PORT }} -p:SmtpUsername=${{ secrets.SMTP_USERNAME }} -p:SmtpPassword=${{ secrets.SMTP_PASSWORD }} -p:FromEmail=${{ secrets.FROM_EMAIL }} -p:ToEmail=${{ secrets.CC_EMAIL }}
+          dotnet publish src/conector.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:PublicBaseUrl=https://github.com/'${{ secrets.PUBLIC_REPO_SLUG }}'/releases/latest/download -p:SmtpHost=${{ secrets.SMTP_HOST }} -p:SmtpPort=${{ secrets.SMTP_PORT }} -p:SmtpUsername=${{ secrets.SMTP_USERNAME }} -p:SmtpPassword=${{ secrets.SMTP_PASSWORD }} -p:FromEmail=${{ secrets.FROM_EMAIL }} -p:ToEmail=${{ secrets.CC_EMAIL }} -p:ClientConfigKey=${{ secrets.ARDITEC365_CONFIG_KEY }}
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Install Inno Setup
