@@ -24,7 +24,7 @@ jobs:
       - name: Checkout private connector repo
         uses: actions/checkout@v4
         with:
-          repository: ArditecSistemas/arditec365-conector
+          repository: ArditecSistemas/arditec365-service
           token: ${{ secrets.ARDITEC365_CONECTOR_PUBLISH_TOKEN }}
           fetch-depth: 0
 
