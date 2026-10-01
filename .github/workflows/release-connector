@@ -1,0 +1,151 @@
+name: Release Connector v2
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  release-connector:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout private connector repo
+        uses: actions/checkout@v4
+        with:
+          repository: ArditecSistemas/arditec365-conector
+          token: ${{ secrets.ARDITEC365_CONECTOR_PUBLISH_TOKEN }}
+          fetch-depth: 0
+
+      - name: Compute new version
+        id: version
+        shell: pwsh
+        run: |
+          # The version lives in the installer project: it is the MSI's version and the exe's too.
+          $content = Get-Content installer/Arditec365.Installer.wixproj -Raw -Encoding UTF8
+          if ($content -match '<ProductVersion[^>]*>([^<]+)</ProductVersion>') {
+            $currentVersion = $Matches[1].Trim()
+          } else {
+            Write-Error "Could not find <ProductVersion> in installer/Arditec365.Installer.wixproj"
+            exit 1
+          }
+
+          Write-Host "Current version: $currentVersion"
+
+          $parts = $currentVersion.Split('.')
+          $major = [int]$parts[0]
+          $minor = [int]$parts[1]
+          $patch = [int]$parts[2]
+
+          switch ('${{ inputs.version_bump }}') {
+            'major' { $major++; $minor = 0; $patch = 0 }
+            'minor' { $minor++; $patch = 0 }
+            'patch' { $patch++ }
+            default { Write-Error "Unknown bump type: ${{ inputs.version_bump }}"; exit 1 }
+          }
+
+          $newVersion = "$major.$minor.$patch"
+          Write-Host "New version: $newVersion"
+
+          echo "new_version=$newVersion" >> $env:GITHUB_OUTPUT
+          echo "tag=v$newVersion" >> $env:GITHUB_OUTPUT
+
+      - name: Patch Arditec365.Installer.wixproj
+        shell: pwsh
+        run: |
+          $newVersion = '${{ steps.version.outputs.new_version }}'
+          $path = 'installer/Arditec365.Installer.wixproj'
+          $content = Get-Content $path -Raw -Encoding UTF8
+          $content = $content -replace '(<ProductVersion[^>]*>)[^<]*(</ProductVersion>)', ('${1}' + $newVersion + '${2}')
+          Set-Content $path $content -Encoding UTF8 -NoNewline
+
+      - name: Commit version bump
+        shell: pwsh
+        run: |
+          $tag = '${{ steps.version.outputs.tag }}'
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add installer/Arditec365.Installer.wixproj
+          git commit -m "chore: bump version to $tag"
+          git push origin HEAD:main
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # After the commit, on purpose: the secrets go into the build, never into git.
+      - name: Write release settings into appsettings.json
+        shell: pwsh
+        env:
+          CLIENT_CONFIG_KEY: ${{ secrets.ARDITEC365_CONFIG_KEY }}
+          API_BASE_URL: ${{ secrets.ARDITEC365_API_BASE_URL }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+          TO_EMAIL: ${{ secrets.CC_EMAIL }}
+          PUBLIC_REPO_SLUG: ${{ secrets.PUBLIC_REPO_SLUG }}
+        run: |
+          foreach ($name in 'CLIENT_CONFIG_KEY','API_BASE_URL','SMTP_HOST','SMTP_PORT','SMTP_USERNAME','SMTP_PASSWORD','FROM_EMAIL','TO_EMAIL','PUBLIC_REPO_SLUG') {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              Write-Error "Secret for $name is empty"
+              exit 1
+            }
+          }
+
+          $path = 'src/Arditec365.Service/appsettings.json'
+          $settings = Get-Content $path -Raw -Encoding UTF8 | ConvertFrom-Json
+
+          $settings.ClientConfigKey       = $env:CLIENT_CONFIG_KEY
+          $settings.Connector.ApiBaseUrl  = $env:API_BASE_URL
+          $settings.Smtp.Host             = $env:SMTP_HOST
+          $settings.Smtp.Port             = [int]$env:SMTP_PORT
+          $settings.Smtp.Username         = $env:SMTP_USERNAME
+          $settings.Smtp.Password         = $env:SMTP_PASSWORD
+          $settings.Smtp.FromEmail        = $env:FROM_EMAIL
+          $settings.Smtp.ToEmail          = $env:TO_EMAIL
+
+          # UPDATE-EXECUTABLE reads version.txt and Arditec365.msi from the latest SaaS release.
+          $updateSource = "https://github.com/$($env:PUBLIC_REPO_SLUG)/releases/latest/download/"
+          $settings | Add-Member -NotePropertyName Update -NotePropertyValue ([pscustomobject]@{ Source = $updateSource }) -Force
+
+          $settings | ConvertTo-Json -Depth 20 | Set-Content $path -Encoding UTF8
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The MSI build publishes the service itself (Release, self-contained win-x64) and writes version.txt.
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          dotnet build installer/Arditec365.Installer.wixproj -c Release -p:ProductVersion=${{ steps.version.outputs.new_version }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload assets to latest public release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.ARDITEC365_CONECTOR_PUBLISH_TOKEN }}
+        run: |
+          # The release marked "latest": the one releases/latest/download/ serves.
+          $tag = gh release view --repo '${{ secrets.PUBLIC_REPO_SLUG }}' --json tagName -q '.tagName'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tag = $tag.Trim()
+
+          gh release upload $tag `
+            installer/bin/x64/Release/Arditec365.msi `
+            installer/bin/x64/Release/version.txt `
+            --repo '${{ secrets.PUBLIC_REPO_SLUG }}' --clobber
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
