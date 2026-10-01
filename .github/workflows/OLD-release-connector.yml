@@ -1,4 +1,4 @@
-name: Release Connector
+name: Release Connector (old)
 
 on:
   workflow_dispatch:
